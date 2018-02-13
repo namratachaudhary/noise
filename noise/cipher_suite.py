@@ -1,10 +1,11 @@
-from collections import namedtuple
-
 import libnacl
 
+from collections import namedtuple
 from pysodium import \
     crypto_aead_chacha20poly1305_encrypt as chachapoly_encrypt, \
     crypto_aead_chacha20poly1305_decrypt as chachapoly_decrypt
+
+from exceptions import MethodNotImplemented
 
 # Set BLAKE2b HASHLEN
 libnacl.crypto_generichash_BYTES = 64
@@ -32,17 +33,20 @@ class DH(SuiteInterface):
         '''
         A DHKey is a keypair used for Diffie-Hellman key agreement.
         '''
-        raise Exception("Method not implemeted")
+        raise MethodNotImplemented("Method not implemeted")
 
     @classmethod
     def DH(cls, keypair, public_key):
         '''
         DH implements Diffie-Hellman key agreement
         '''
-        raise Exception("Method not implemeted")
+        raise MethodNotImplemented("Method not implemeted")
 
 # Cipher is a AEAD cipher that has been initialized with a key.
 class Cipher(SuiteInterface):
+
+    MAX_NONCE = 2 ** 64 - 1
+
     @classmethod
     def encrypt(cls, k, n, ad, plaintext):
         '''
@@ -50,7 +54,7 @@ class Cipher(SuiteInterface):
         ciphertext to out along with an authentication tag over the ciphertext
         and optional authenticated data
         '''
-        raise Exception("Method not implemeted")
+        raise MethodNotImplemented("Method not implemeted")
 
     @classmethod
     def decrypt(cls, k, n, ad, ciphertext):
@@ -59,12 +63,16 @@ class Cipher(SuiteInterface):
         decrypts the provided ciphertext using the provided nonce and
         appends it to out.
         '''
-        raise Exception("Method not implemeted")
+        raise MethodNotImplemented("Method not implemeted")
+
+    @classmethod 
+    def rekey(self, key):
+        self.encrypt(key, MAX_NONCE, b'', b'\x00' * 32)[:32]
 
 class Hash(SuiteInterface):
     @classmethod 
     def hash(cls, inputbytes):
-        raise Exception("Method not implemeted")
+        raise MethodNotImplemented("Method not implemeted")
 
 ###### DH #######
 
