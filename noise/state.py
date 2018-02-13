@@ -1,6 +1,6 @@
 from patterns import HandshakePatterns
 from cipher_suite import SuiteInterface
-from exceptions import NoiseMaxNonceError
+from exceptions import NoiseMaxNonceError, HandshakeError
 
 class Empty(SuiteInterface):
     """
@@ -159,3 +159,143 @@ class SymmetricState(object):
         c1 = CipherState(self.cipher_state.cipher, temp_k1)
         c2 = CipherState(self.cipher_state.cipher, temp_k2)
         return c1, c2
+
+
+class HandshakeState(object):
+
+    def __init__(self, dh, cipher, hasher):
+        self.dh = dh
+        self.cipher = cipher
+        self.hasher = hasher
+
+    def initialize(self, handshake_pattern, initiator, prologue=b'',
+                   s=empty, e=empty, rs=empty, re=empty):
+
+        # Originally in specification:
+        # "Derives a protocol_name byte sequence by combining the names for
+        # the handshake pattern and crypto functions, as specified in Section 8."
+        # Instead, we supply the NoiseProtocol to the function. 
+        # The protocol name should already be validated.
+
+        protocol_name = b'_'.join((handshake_pattern, self.dh.NAME,
+                                   self.cipher.NAME, self.hasher.NAME))
+        self.symmetricstate = SymmetricState(self.dh, self.cipher, self.hasher,
+                                             protocol_name)
+        self.symmetricstate.mixhash(prologue)
+        self.s = s if s is not None else Empty()
+        self.e = e if e is not None else Empty()
+        self.rs = rs if rs is not None else Empty()
+        self.re = re if re is not None else Empty()
+
+        # Calls MixHash() once for each public key listed in the pre-messages from handshake_pattern, with the specified
+        # public key as input (...). If both initiator and responder have pre-messages, the initiator’s public keys are
+        # hashed first
+
+        pattern = HandshakePatterns(handshake_pattern)
+        if pattern.i_pre not in ('', 's', 'e', 'se'):
+            raise HandshakeError("Invalid initiator pre-message")
+        if pattern.r_pre not in ('', 's', 'e', 'se'):
+            raise HandshakeError("Invalid responder pre-message")
+        for token in pattern.i_pre:
+            if token == 's':
+                if self.s is empty:
+                    raise HandshakeError("No static public key (initiator)")
+                self.symmetricstate.mixhash(self.s.public)
+            elif token == 'e':
+                if self.e is empty:
+                    raise HandshakeError("No ephemeral public key (initiator)")
+                self.symmetricstate.mixhash(self.e.public)
+
+        # Sets message_patterns to the message patterns from handshake_pattern
+
+        for token in pattern.r_pre:
+            if token == 's':
+                if self.rs is empty:
+                    raise HandshakeError("No static public key (responder)")
+                self.symmetricstate.mixhash(self.rs)
+            elif token == 'e':
+                if self.re is empty:
+                    raise HandshakeError("No ephemeral public key (responder)")
+                self.symmetricstate.mixhash(self.re)
+
+        self.message_patterns = list(pattern.message_patterns)
+
+    def write_message(self, payload, message_buffer):
+        # Fetches and deletes the next message pattern from message_patterns, 
+        # then sequentially processes each token
+        # from the message pattern
+        # currently using '.append' protocol, but may need changing
+        message_pattern = self.message_patterns.pop(0)
+
+        for token in message_pattern:
+
+            if token == 'e':
+                self.e = self.dh.generate_keypair()
+                message_buffer.append(self.e.public_key)
+                self.symmetricstate.mixhash(self.e.public_key)
+
+            elif token == 's':
+                msg = self.symmetricstate.encrypt_and_hash(self.s.public_key)
+                message_buffer.append(msg)
+    
+            elif token[:2] == 'dh':
+                try:
+                    x = {'e': self.e, 's': self.s}[token[2]]
+                    y = {'e': self.re, 's': self.rs}[token[3]]
+                except KeyError:
+                    raise HandshakeError("Invalid pattern: " + token)
+                self.symmetricstate.mixkey(self.dh.DH(x, y))
+
+            else:
+                raise HandshakeError("Invalid pattern: " + token)
+
+        message_buffer.append(self.symmetricstate.encrypt_and_hash(payload))
+
+        if len(self.message_patterns) == 0:
+            return self.symmetricstate.split()
+
+    def read_message(self, message, payload_buffer):
+        # Fetches and deletes the next message pattern from message_patterns, 
+        # then sequentially processes each token
+        # from the message pattern
+        # currently using '.append' protocol, but may need changing
+        message_pattern = self.message_patterns.pop(0)
+
+        for token in message_pattern:
+    
+            if token == 'e':
+                if len(message) < self.dh.DHLEN:
+                    raise HandshakeError("Message too short""")
+                self.re = message[:self.dh.DHLEN]
+                message = message[self.dh.DHLEN:]
+                self.symmetricstate.mixhash(self.re)
+    
+            elif token == 's':
+                has_key = self.symmetricstate.cipherstate.has_key
+                nbytes = self.dh.DHLEN + 16 if has_key else self.dh.DHLEN
+    
+                if len(message) < nbytes:
+                    raise HandshakeError("Message too short""")
+                temp, message = message[:nbytes], message[nbytes:]
+    
+                if has_key:
+                    self.rs = self.symmetricstate.decrypt_and_hash(temp)
+                else:
+                    self.rs = temp
+    
+            elif token[:2] == 'dh':
+                try:
+                    x = {'e': self.e, 's': self.s}[token[2]]
+                    y = {'e': self.re, 's': self.rs}[token[3]]
+  
+                except KeyError:
+                    raise HandshakeError("Invalid pattern: " + token)
+  
+                self.symmetricstate.mixkey(self.dh.DH(x, y))
+            else:
+                raise HandshakeError("Invalid pattern: " + token)
+  
+        payload_buffer.append(self.symmetricstate.decrypt_and_hash(message))
+
+        if len(self.message_patterns) == 0:
+            return self.symmetricstate.split()
