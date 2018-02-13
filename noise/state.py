@@ -2,7 +2,7 @@ from patterns import HandshakePatterns
 from cipher_suite import SuiteInterface
 from exceptions import NoiseMaxNonceError
 
-class Empty(Singleton):
+class Empty(SuiteInterface):
     """
     Special empty value
     Use ``empty'' instantiation
