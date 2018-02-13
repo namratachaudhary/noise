@@ -40,7 +40,7 @@ class Hkdf(object) :
         @param  input_key_material 
         @return prk 
         '''
-        hash_len = 32L # tofix
+        hash_len = 32 # tofix
         if salt == None or len(salt) == 0 :
             salt = bytearray((0,) * hash_len)
 
@@ -54,7 +54,7 @@ class Hkdf(object) :
         @param output_length
         @return okm
         '''
-        hash_len = 32L # tofix
+        hash_len = 32 # tofix
         output_length = int(output_length)
 
         if output_length > 255 * hash_len :
