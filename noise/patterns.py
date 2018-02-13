@@ -5,7 +5,7 @@ from collections import namedtuple
 HandshakePattern = namedtuple('HandshakePattern',
                               ('prereq', 'i_pre', 'r_pre', 'message_patterns'))
 
-HSPatterns = {
+HandshakePatterns = {
     # One-way patterns
     'Noise_N': HandshakePattern(('rs',), '', 's',
                                 (('e', 'dhes'),)),
