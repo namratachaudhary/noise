@@ -1,5 +1,7 @@
 # Noise
 
+[![Build Status](https://travis-ci.org/namratachaudhary/noise.svg?branch=master)](https://travis-ci.org/namratachaudhary/noise)
+
 Python implementation of the [Noise Protocol Framework](https://noiseprotocol.org/)
 
 Noise is a low-level framework for building crypto protocols. Noise protocols support mutual and optional authentication, identity hiding, forward secrecy, zero round-trip encryption, and other advanced features.
