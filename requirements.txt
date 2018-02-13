@@ -1,3 +1,4 @@
 libnacl
 pypandoc
 pysodium
+pytest>=3.2.0
